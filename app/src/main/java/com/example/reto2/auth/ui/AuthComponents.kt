@@ -58,6 +58,7 @@ private val Muted = Color(0xFF718096)
 fun AuthPage(
     title: String,
     description: String,
+    onBackToMarket: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = PageTint) {
@@ -154,7 +155,16 @@ fun AuthPage(
                     content = content
                 )
             }
-            Spacer(Modifier.height(2.dp))
+            if (onBackToMarket != null) {
+                TextButton(
+                    onClick = onBackToMarket,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text("Volver al mercado", color = Indigo, fontWeight = FontWeight.SemiBold)
+                }
+            } else {
+                Spacer(Modifier.height(2.dp))
+            }
         }
     }
 }

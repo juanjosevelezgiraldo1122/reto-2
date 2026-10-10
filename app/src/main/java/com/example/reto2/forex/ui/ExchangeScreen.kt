@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.reto2.auth.ui.AuthSwitchAction
 import com.example.reto2.forex.model.ExchangeOperation
 import com.example.reto2.forex.model.OperationStatus
 import com.example.reto2.forex.model.TradeSide
@@ -57,7 +58,11 @@ private val SecondaryText = Color(0xFF7B8499)
 private val CurrencyCodes = listOf("USD", "EUR", "COP", "GBP", "JPY", "CAD", "CHF", "MXN")
 
 @Composable
-fun ExchangeScreen(viewModel: ExchangeViewModel = viewModel()) {
+fun ExchangeScreen(
+    viewModel: ExchangeViewModel = viewModel(),
+    onRequireLogin: () -> Unit = {},
+    onRequireRegistration: () -> Unit = {}
+) {
     val state by viewModel.uiState.collectAsState()
 
     Column(
@@ -69,16 +74,17 @@ fun ExchangeScreen(viewModel: ExchangeViewModel = viewModel()) {
             .padding(top = 18.dp, bottom = 30.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        ExchangeHeader()
+        ExchangeHeader(onRequireLogin)
         MarketIntro()
-        TradeCard(state, viewModel)
+        TradeCard(state, viewModel, onRequireLogin)
+        AuthSwitchAction("¿Nuevo en el mercado?  Crea tu cuenta", onRequireRegistration)
         RateNotice()
         OperationHistory(state.operations)
     }
 }
 
 @Composable
-private fun ExchangeHeader() {
+private fun ExchangeHeader(onRequireLogin: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Surface(shape = RoundedCornerShape(15.dp), color = Navy) {
             Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
@@ -89,8 +95,8 @@ private fun ExchangeHeader() {
             Text("CURRENCY EXCHANGE", fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, color = Navy)
             Text("Global markets", fontSize = 12.sp, color = SecondaryText)
         }
-        Surface(shape = CircleShape, color = Color.White) {
-            Text("●  Global", modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp), color = Color(0xFF238B72), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        TextButton(onClick = onRequireLogin) {
+            Text("Iniciar sesión", color = Blue, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         }
     }
 }
@@ -105,7 +111,11 @@ private fun MarketIntro() {
 }
 
 @Composable
-private fun TradeCard(state: ExchangeUiState, viewModel: ExchangeViewModel) {
+private fun TradeCard(
+    state: ExchangeUiState,
+    viewModel: ExchangeViewModel,
+    onRequireLogin: () -> Unit
+) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(26.dp),
@@ -174,14 +184,14 @@ private fun TradeCard(state: ExchangeUiState, viewModel: ExchangeViewModel) {
                 }
             }
             Button(
-                onClick = viewModel::confirmRequest,
+                onClick = onRequireLogin,
                 modifier = Modifier.fillMaxWidth().height(55.dp),
                 shape = RoundedCornerShape(15.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Navy)
             ) {
                 Text(if (state.side == TradeSide.BUY) "Continuar compra" else "Continuar venta", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             }
-            Text("Al continuar, crearás una solicitud pendiente de procesamiento.", modifier = Modifier.fillMaxWidth(), color = SecondaryText, fontSize = 11.sp)
+            Text("Inicia sesión para continuar. No se enviará ninguna operación antes de autenticarte.", modifier = Modifier.fillMaxWidth(), color = SecondaryText, fontSize = 11.sp)
         }
     }
 }

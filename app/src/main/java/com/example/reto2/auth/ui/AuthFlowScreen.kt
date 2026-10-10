@@ -9,12 +9,23 @@ import com.example.reto2.login.ui.LoginScreen
 import com.example.reto2.registration.ui.RegistrationScreen
 
 @Composable
-fun AuthFlowScreen() {
-    var showRegistration by rememberSaveable { mutableStateOf(false) }
+fun AuthFlowScreen(
+    initialRegistration: Boolean = false,
+    onBackToMarket: () -> Unit = {}
+) {
+    var showRegistration by rememberSaveable(initialRegistration) {
+        mutableStateOf(initialRegistration)
+    }
 
     if (showRegistration) {
-        RegistrationScreen(onLoginClick = { showRegistration = false })
+        RegistrationScreen(
+            onLoginClick = { showRegistration = false },
+            onBackToMarket = onBackToMarket
+        )
     } else {
-        LoginScreen(onRegisterClick = { showRegistration = true })
+        LoginScreen(
+            onRegisterClick = { showRegistration = true },
+            onBackToMarket = onBackToMarket
+        )
     }
 }

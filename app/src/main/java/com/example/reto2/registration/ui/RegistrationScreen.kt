@@ -22,13 +22,15 @@ import com.example.reto2.registration.viewmodel.RegistrationViewModel
 @Composable
 fun RegistrationScreen(
     viewModel: RegistrationViewModel = viewModel(),
-    onLoginClick: () -> Unit = {}
+    onLoginClick: () -> Unit = {},
+    onBackToMarket: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
 
     AuthPage(
         title = "Empieza aquí.",
-        description = "Crea tu cuenta y haz espacio para lo que sigue."
+        description = "Crea tu cuenta y haz espacio para lo que sigue.",
+        onBackToMarket = onBackToMarket
     ) {
         AuthInput(
             value = state.form.email,
