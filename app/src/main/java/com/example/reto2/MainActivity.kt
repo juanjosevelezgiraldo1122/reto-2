@@ -7,7 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import com.example.reto2.registration.ui.RegistrationScreen
+import com.example.reto2.login.ui.LoginScreen
 import com.example.reto2.ui.theme.Reto2Theme
 
 class MainActivity : ComponentActivity() {
@@ -17,7 +17,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             Reto2Theme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    RegistrationScreen()
+                    LoginScreen()
                 }
             }
         }
