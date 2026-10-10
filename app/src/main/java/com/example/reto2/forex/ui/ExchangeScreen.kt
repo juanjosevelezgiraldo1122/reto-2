@@ -1,6 +1,7 @@
 package com.example.reto2.forex.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +22,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,10 +36,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,6 +59,7 @@ import com.example.reto2.forex.model.TradeSide
 import com.example.reto2.forex.viewmodel.ExchangeUiState
 import com.example.reto2.forex.viewmodel.ExchangeViewModel
 import java.text.SimpleDateFormat
+import java.text.DecimalFormat
 import java.util.Date
 import java.util.Locale
 
@@ -59,6 +69,15 @@ private val Teal = Color(0xFF45C7A5)
 private val Background = Color(0xFFF3F5FA)
 private val SecondaryText = Color(0xFF7B8499)
 private val CurrencyCodes = listOf("USD", "EUR", "COP", "GBP", "JPY", "CAD", "CHF", "MXN")
+private val Mint = Color(0xFF8DE8D0)
+
+private enum class MarketTab(val title: String, val glyph: String) {
+    HOME("Inicio", "⌂"),
+    MARKETS("Mercados", "↗"),
+    CONVERT("Convertir", "⇄"),
+    ACTIVITY("Actividad", "◷"),
+    PROFILE("Perfil", "○")
+}
 
 @Composable
 fun ExchangeScreen(
@@ -69,25 +88,218 @@ fun ExchangeScreen(
     onLogout: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
+    var selectedTab by rememberSaveable { mutableStateOf(MarketTab.HOME.name) }
     LaunchedEffect(session) { viewModel.refreshFor(session) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-            .padding(top = 18.dp, bottom = 30.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
-    ) {
-        ExchangeHeader(session, onRequireLogin, onLogout)
-        MarketIntro()
-        TradeCard(state, viewModel, session, onRequireLogin)
-        if (session == null) {
-            AuthSwitchAction("¿Nuevo en el mercado?  Crea tu cuenta", onRequireRegistration)
+    val activeTab = runCatching { MarketTab.valueOf(selectedTab) }.getOrDefault(MarketTab.HOME)
+    Scaffold(
+        containerColor = Background,
+        bottomBar = {
+            NavigationBar(containerColor = Color.White, tonalElevation = 10.dp) {
+                MarketTab.entries.forEach { tab ->
+                    NavigationBarItem(
+                        selected = tab == activeTab,
+                        onClick = { selectedTab = tab.name },
+                        icon = { Text(tab.glyph, fontSize = 20.sp, fontWeight = FontWeight.SemiBold) },
+                        label = { Text(tab.title, fontSize = 9.sp, maxLines = 1) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Blue,
+                            selectedTextColor = Blue,
+                            indicatorColor = Blue.copy(alpha = .09f),
+                            unselectedIconColor = SecondaryText,
+                            unselectedTextColor = SecondaryText
+                        )
+                    )
+                }
+            }
         }
-        RateNotice()
-        OperationHistory(state.operations)
+    ) {
+        innerPadding ->
+        Column(Modifier.fillMaxSize().padding(innerPadding)) {
+            Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp)) {
+                ExchangeHeader(session, onRequireLogin, onLogout)
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 12.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                when (activeTab) {
+                    MarketTab.HOME -> HomeView(state, onOpenMarkets = { selectedTab = MarketTab.MARKETS.name }, onOpenConverter = { selectedTab = MarketTab.CONVERT.name })
+                    MarketTab.MARKETS -> MarketsView(state, onRefresh = viewModel::refreshRates)
+                    MarketTab.CONVERT -> {
+                        PageHeading("Convertir", "Configura tu solicitud de compra o venta.")
+                        TradeCard(state, viewModel, session, onRequireLogin)
+                        RateNotice()
+                    }
+                    MarketTab.ACTIVITY -> {
+                        PageHeading("Tu actividad", "Consulta el estado y el historial de tus solicitudes.")
+                        if (session == null) LoginRequiredCard("Inicia sesión para consultar tu actividad", onRequireLogin)
+                        else OperationHistory(state.operations)
+                    }
+                    MarketTab.PROFILE -> ProfileView(session, onRequireLogin, onRequireRegistration, onLogout)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeView(
+    state: ExchangeUiState,
+    onOpenMarkets: () -> Unit,
+    onOpenConverter: () -> Unit
+) {
+    MarketHero()
+    MarketHighlights()
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Vista rápida", color = Navy, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+            Text("Tasas de referencia disponibles", color = SecondaryText, fontSize = 11.sp)
+        }
+        TextButton(onClick = onOpenMarkets) { Text("Ver mercado", color = Blue, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        FeaturedPair("USD", "COP", state.ratesFromUsd["COP"], Modifier.weight(1f))
+        FeaturedPair("EUR", "USD", state.ratesFromUsd["EUR"]?.toBigDecimalOrNull()?.let {
+            runCatching { java.math.BigDecimal.ONE.divide(it, 5, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() }.getOrNull()
+        }, Modifier.weight(1f))
+    }
+    Button(
+        onClick = onOpenConverter,
+        modifier = Modifier.fillMaxWidth().height(54.dp),
+        shape = RoundedCornerShape(17.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Navy)
+    ) { Text("Abrir el convertidor  →", fontWeight = FontWeight.SemiBold) }
+    RateNotice()
+}
+
+@Composable
+private fun PageHeading(title: String, subtitle: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(title, color = Navy, fontSize = 27.sp, fontWeight = FontWeight.Bold, letterSpacing = (-.6).sp)
+        Text(subtitle, color = SecondaryText, fontSize = 13.sp, lineHeight = 18.sp)
+    }
+}
+
+@Composable
+private fun MarketsView(state: ExchangeUiState, onRefresh: () -> Unit) {
+    PageHeading("Mercados", "Monedas principales frente al dólar estadounidense.")
+    Surface(shape = RoundedCornerShape(22.dp), color = Navy) {
+        Column(Modifier.fillMaxWidth().padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("COTIZACIONES", color = Color.White.copy(alpha = .66f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Text("Referencia de mercado", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                }
+                TextButton(onClick = onRefresh) { Text("Actualizar", color = Mint, fontSize = 11.sp) }
+            }
+            state.ratesUpdatedAt?.let {
+                Text("Actualizado ${SimpleDateFormat("HH:mm · dd MMM", Locale.forLanguageTag("es-CO")).format(Date(it))}", color = Color.White.copy(alpha = .62f), fontSize = 10.sp)
+            }
+        }
+    }
+    CurrencyCodes.forEach { currency ->
+        MarketCurrencyRow(currency, state.ratesFromUsd[currency])
+    }
+    RateNotice()
+}
+
+@Composable
+private fun FeaturedPair(base: String, quote: String, rate: String?, modifier: Modifier = Modifier) {
+    Surface(modifier, shape = RoundedCornerShape(19.dp), color = Color.White) {
+        Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Text("$base / $quote", color = SecondaryText, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
+            Text(rate ?: "—", color = Navy, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (rate == null) "Cotización no disponible" else "Tasa indicativa", color = if (rate == null) SecondaryText else Color(0xFF247862), fontSize = 9.sp)
+        }
+    }
+}
+
+@Composable
+private fun MarketCurrencyRow(currency: String, rate: String?) {
+    Surface(shape = RoundedCornerShape(18.dp), color = Color.White) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = CircleShape, color = Color(0xFFF0F1FC)) {
+                Box(Modifier.size(42.dp), contentAlignment = Alignment.Center) {
+                    Text(currency.take(1), color = Blue, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            }
+            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                Text(currency, color = Navy, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("1 USD en $currency", color = SecondaryText, fontSize = 10.sp)
+            }
+            Text(rate ?: "No disponible", color = if (rate == null) SecondaryText else Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun LoginRequiredCard(message: String, onRequireLogin: () -> Unit) {
+    Surface(shape = RoundedCornerShape(22.dp), color = Color.White) {
+        Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Surface(shape = CircleShape, color = Blue.copy(alpha = .08f)) {
+                Text("↗", Modifier.padding(horizontal = 16.dp, vertical = 11.dp), color = Blue, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+            }
+            Text(message, color = Navy, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Button(onClick = onRequireLogin, shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
+                Text("Iniciar sesión")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileView(
+    session: UserSession?,
+    onRequireLogin: () -> Unit,
+    onRequireRegistration: () -> Unit,
+    onLogout: () -> Unit
+) {
+    PageHeading("Perfil", "Tu espacio personal y preferencias de acceso.")
+    Surface(shape = RoundedCornerShape(24.dp), color = Navy) {
+        Row(Modifier.fillMaxWidth().padding(19.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = CircleShape, color = Color.White.copy(alpha = .12f)) {
+                Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+                    Text(if (session == null) "A" else "U", color = Mint, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                Text(if (session == null) "Visitante" else "Usuario tradicional", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(if (session == null) "Explora el mercado libremente" else if (session.mode.name == "DEMO") "Sesión de demostración" else "Sesión personal", color = Color.White.copy(alpha = .68f), fontSize = 11.sp)
+            }
+            Text(if (session == null) "INVITADO" else "ACTIVO", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
+        }
+    }
+    ProfilePreference("Seguridad", "Tu contraseña se guarda protegida en este dispositivo", "✓")
+    ProfilePreference("Privacidad", "Tus solicitudes solo se muestran en tu cuenta", "◈")
+    ProfilePreference("Moneda de referencia", "USD · utilizada para mostrar las tasas del mercado", "◎")
+    if (session == null) {
+        Button(onClick = onRequireLogin, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
+            Text("Iniciar sesión", fontWeight = FontWeight.SemiBold)
+        }
+        AuthSwitchAction("Crear una cuenta", onRequireRegistration)
+    } else {
+        Text("Las operaciones de esta versión son solicitudes locales de demostración y no realizan transferencias.", color = SecondaryText, fontSize = 11.sp, lineHeight = 16.sp)
+        TextButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) { Text("Cerrar sesión", color = Color(0xFFB04444), fontWeight = FontWeight.SemiBold) }
+    }
+}
+
+@Composable
+private fun ProfilePreference(title: String, description: String, glyph: String) {
+    Surface(shape = RoundedCornerShape(18.dp), color = Color.White) {
+        Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFFF0F1FC)) {
+                Text(glyph, Modifier.padding(horizontal = 11.dp, vertical = 9.dp), color = Blue, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+            Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title, color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(description, color = SecondaryText, fontSize = 10.sp, lineHeight = 14.sp)
+            }
+        }
     }
 }
 
@@ -98,14 +310,14 @@ private fun ExchangeHeader(
     onLogout: () -> Unit
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Surface(shape = RoundedCornerShape(15.dp), color = Navy) {
+        Surface(shape = RoundedCornerShape(15.dp), color = Navy, shadowElevation = 5.dp) {
             Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
                 Text("FX", color = Teal, fontWeight = FontWeight.Black, fontSize = 17.sp)
             }
         }
         Column(Modifier.padding(start = 12.dp).weight(1f)) {
-            Text("CURRENCY EXCHANGE", fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, color = Navy)
-            Text("Global markets", fontSize = 12.sp, color = SecondaryText)
+            Text("AUREX", fontSize = 13.sp, fontWeight = FontWeight.Black, letterSpacing = 1.8.sp, color = Navy)
+            Text("Mercado global de divisas", fontSize = 11.sp, color = SecondaryText)
         }
         if (session == null) {
             TextButton(onClick = onRequireLogin) {
@@ -113,19 +325,59 @@ private fun ExchangeHeader(
             }
         } else {
             Column(horizontalAlignment = Alignment.End) {
-                Text("CLIENTE · DEMO", color = Color(0xFF238B72), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                TextButton(onClick = onLogout) { Text("Salir", color = Blue, fontSize = 12.sp) }
+                Text(if (session.mode.name == "DEMO") "CLIENTE · DEMO" else "CUENTA PERSONAL", color = Color(0xFF238B72), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                TextButton(onClick = onLogout) { Text("Cerrar sesión", color = Blue, fontSize = 11.sp) }
             }
         }
     }
 }
 
 @Composable
-private fun MarketIntro() {
-    Column {
-        Text("Tu dinero,\nsin fronteras.", color = Navy, fontSize = 32.sp, lineHeight = 35.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.7).sp)
-        Spacer(Modifier.height(7.dp))
-        Text("Compra y vende divisas con claridad en cada paso.", color = SecondaryText, fontSize = 14.sp)
+private fun MarketHero() {
+    Surface(shape = RoundedCornerShape(30.dp), color = Navy, shadowElevation = 12.dp) {
+        Box(Modifier.fillMaxWidth().height(232.dp)) {
+            Canvas(Modifier.fillMaxSize()) {
+                drawRect(Brush.linearGradient(listOf(Color(0xFF111A31), Color(0xFF272A70), Color(0xFF153B54))))
+                drawCircle(Color(0xFF7774FF).copy(alpha = .12f), size.minDimension * .57f, Offset(size.width * .94f, size.height * .06f))
+                drawCircle(Mint.copy(alpha = .08f), size.minDimension * .32f, Offset(size.width * .99f, size.height * .08f))
+                val chart = Path().apply {
+                    moveTo(size.width * .58f, size.height * .61f)
+                    cubicTo(size.width * .67f, size.height * .46f, size.width * .70f, size.height * .68f, size.width * .78f, size.height * .51f)
+                    cubicTo(size.width * .85f, size.height * .36f, size.width * .89f, size.height * .52f, size.width, size.height * .25f)
+                }
+                drawPath(chart, Mint.copy(alpha = .52f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
+            }
+            Column(Modifier.align(Alignment.CenterStart).padding(horizontal = 22.dp, vertical = 20.dp).fillMaxWidth(.82f)) {
+                Surface(shape = CircleShape, color = Color.White.copy(alpha = .12f)) {
+                    Row(Modifier.padding(horizontal = 11.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Box(Modifier.size(6.dp).background(Mint, CircleShape))
+                        Text("CAMBIO DE DIVISAS · SIMPLE", color = Color.White.copy(alpha = .86f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                Text("Tu próximo destino\nno tiene fronteras.", color = Color.White, fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold, letterSpacing = (-.7).sp)
+                Spacer(Modifier.height(9.dp))
+                Text("Explora el mercado y prepara tu cambio con total claridad.", color = Color.White.copy(alpha = .72f), fontSize = 12.sp, lineHeight = 17.sp)
+            }
+            Surface(Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 17.dp), shape = CircleShape, color = Mint.copy(alpha = .13f)) {
+                Text("✦", Modifier.padding(horizontal = 12.dp, vertical = 7.dp), color = Mint, fontSize = 16.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MarketHighlights() {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        listOf("08" to "DIVISAS", "02" to "OPERACIONES", "01" to "HISTORIAL").forEach { (value, label) ->
+            Surface(Modifier.weight(1f), shape = RoundedCornerShape(17.dp), color = Color.White) {
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 13.dp)) {
+                    Text(value, color = Navy, fontSize = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = (-.4).sp)
+                    Spacer(Modifier.height(3.dp))
+                    Text(label, color = SecondaryText, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp, maxLines = 1)
+                }
+            }
+        }
     }
 }
 
@@ -140,7 +392,7 @@ private fun TradeCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(26.dp),
         color = Color.White,
-        shadowElevation = 5.dp
+        shadowElevation = 8.dp
     ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(
@@ -151,7 +403,10 @@ private fun TradeCard(
                 TradeSideButton("Vender", state.side == TradeSide.SELL, Modifier.weight(1f)) { viewModel.selectSide(TradeSide.SELL) }
             }
 
-            Text(if (state.side == TradeSide.BUY) "Quiero comprar" else "Quiero vender", color = Navy, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(if (state.side == TradeSide.BUY) "Prepara tu compra" else "Prepara tu venta", color = Navy, fontWeight = FontWeight.Bold, fontSize = 19.sp)
+                Text("Elige las monedas y el importe de tu solicitud.", color = SecondaryText, fontSize = 12.sp)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 CurrencyDropdown(
                     label = "Entregas",
@@ -182,14 +437,32 @@ private fun TradeCard(
                 )
             }
 
-            Surface(shape = RoundedCornerShape(15.dp), color = Color(0xFFF6F7FC)) {
+            Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFF5F6FA)) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Tipo de cambio", fontSize = 12.sp, color = SecondaryText)
-                        Text("Disponible al conectar proveedor", fontSize = 12.sp, color = Navy, fontWeight = FontWeight.Medium)
+                        Text("COTIZACIÓN INDICATIVA", fontSize = 10.sp, color = SecondaryText, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
+                        if (state.indicativeRate == null) {
+                            Text(state.rateError ?: "Cargando cotización…", fontSize = 12.sp, color = if (state.rateError == null) Navy else Color(0xFFB04444), fontWeight = FontWeight.Medium)
+                        } else {
+                            Text("1 ${state.sourceCurrency} = ${state.indicativeRate} ${state.targetCurrency}", fontSize = 14.sp, color = Navy, fontWeight = FontWeight.Bold)
+                            val amount = state.amount.replace(',', '.').toBigDecimalOrNull()
+                            val rate = state.indicativeRate.toBigDecimalOrNull()
+                            if (amount != null && rate != null) {
+                                val estimate = DecimalFormat("#,##0.00").format(amount.multiply(rate))
+                                Text("Recibirías aprox. $estimate ${state.targetCurrency}", fontSize = 11.sp, color = Color(0xFF247862))
+                            }
+                        }
                     }
-                    Text("—", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Navy)
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("MERCADO", fontSize = 9.sp, color = Blue, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
+                        TextButton(onClick = viewModel::refreshRates) {
+                            Text("Actualizar", fontSize = 10.sp, color = Blue)
+                        }
+                    }
                 }
+            }
+            state.ratesUpdatedAt?.let { updatedAt ->
+                Text("Actualizada ${SimpleDateFormat("HH:mm · dd MMM", Locale.forLanguageTag("es-CO")).format(Date(updatedAt))} · tasa de referencia, no es una oferta de ejecución", color = SecondaryText, fontSize = 10.sp, lineHeight = 14.sp)
             }
 
             if (state.validationMessage != null) {
@@ -209,14 +482,14 @@ private fun TradeCard(
                     else onRequireLogin()
                 },
                 modifier = Modifier.fillMaxWidth().height(55.dp),
-                shape = RoundedCornerShape(15.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Navy)
+                shape = RoundedCornerShape(17.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Blue)
             ) {
                 Text(
                     when {
                         !RolePermissions.canTrade(session) -> "Inicia sesión para operar"
-                        state.side == TradeSide.BUY -> "Crear solicitud de compra demo"
-                        else -> "Crear solicitud de venta demo"
+                        state.side == TradeSide.BUY -> "Continuar con la compra"
+                        else -> "Continuar con la venta"
                     },
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp
@@ -224,7 +497,8 @@ private fun TradeCard(
             }
             Text(
                 if (RolePermissions.canTrade(session))
-                    "Modo demostración: se guardará como Pendiente; no se ejecutará una operación real."
+                    if (session?.mode?.name == "DEMO") "Modo demostración: la solicitud se guardará como pendiente, sin ejecutar un cambio real."
+                    else "Tu solicitud se guardará y podrás consultar su estado en Actividad."
                 else "Inicia sesión para continuar. No se enviará ninguna operación antes de autenticarte.",
                 modifier = Modifier.fillMaxWidth(),
                 color = SecondaryText,
@@ -284,13 +558,15 @@ private fun CurrencyDropdown(label: String, selected: String, modifier: Modifier
 
 @Composable
 private fun RateNotice() {
-    Surface(shape = RoundedCornerShape(18.dp), color = Color(0xFFEDEFFE)) {
-        Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.Top) {
-            Text("✦", color = Blue, fontSize = 18.sp, modifier = Modifier.padding(end = 10.dp))
+    Surface(shape = RoundedCornerShape(19.dp), color = Color(0xFFEDEFFE)) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.Top) {
+            Surface(shape = CircleShape, color = Blue.copy(alpha = .1f), modifier = Modifier.padding(end = 11.dp)) {
+                Text("✓", color = Blue, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp))
+            }
             Column {
                 Text("Transparencia desde el inicio", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(3.dp))
-                Text("El precio final y cualquier cargo se mostrarán antes de confirmar cuando se conecte el servicio de divisas.", color = SecondaryText, fontSize = 12.sp, lineHeight = 17.sp)
+                Text("La cotización es indicativa. No es una oferta de ejecución; las solicitudes de esta versión quedan pendientes y no mueven dinero.", color = SecondaryText, fontSize = 12.sp, lineHeight = 17.sp)
             }
         }
     }

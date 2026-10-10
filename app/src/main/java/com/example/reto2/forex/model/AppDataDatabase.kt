@@ -56,7 +56,8 @@ class ExchangeOperationRepository(context: Context) {
         side: TradeSide,
         sourceCurrency: String,
         targetCurrency: String,
-        amount: String
+        amount: String,
+        referenceRate: String? = null
     ): ExchangeOperation {
         check(RolePermissions.canTrade(session)) { "Este rol no puede operar divisas" }
         val operation = ExchangeOperation(
@@ -65,7 +66,8 @@ class ExchangeOperationRepository(context: Context) {
             side = side,
             sourceCurrency = sourceCurrency,
             targetCurrency = targetCurrency,
-            amount = amount
+            amount = amount,
+            referenceRate = referenceRate
         )
         database.insertOperation(operation)
         return operation

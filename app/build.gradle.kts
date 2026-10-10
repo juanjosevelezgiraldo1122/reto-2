@@ -3,6 +3,16 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val localFinnhubToken = rootProject.file(".env").takeIf { it.isFile }
+    ?.readLines()
+    ?.firstOrNull { it.trimStart().startsWith("FINNHUB_API_KEY=") }
+    ?.substringAfter('=')
+    ?.trim()
+    ?.removeSurrounding("\"")
+    ?.removeSurrounding("'")
+    .orEmpty()
+val finnhubToken = providers.environmentVariable("FINNHUB_API_KEY").orElse(localFinnhubToken).get()
+
 android {
     namespace = "com.example.reto2"
     compileSdk {
@@ -15,6 +25,8 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
+
+        buildConfigField("String", "FINNHUB_TOKEN", "\"$finnhubToken\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -32,6 +44,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

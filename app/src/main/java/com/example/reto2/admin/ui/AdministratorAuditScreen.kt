@@ -62,11 +62,16 @@ fun AdministratorAuditScreen(
         verticalArrangement = Arrangement.spacedBy(17.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("FX  /  CONTROL", color = Violet, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.3.sp)
-                Text("Centro de auditoría", color = Midnight, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+            Surface(shape = RoundedCornerShape(14.dp), color = Midnight, shadowElevation = 4.dp) {
+                Box(Modifier.size(43.dp), contentAlignment = Alignment.Center) {
+                    Text("A", color = Color(0xFF8DE8D0), fontSize = 20.sp, fontWeight = FontWeight.Black)
+                }
             }
-            TextButton(onClick = onLogout) { Text("Salir", color = Violet, fontWeight = FontWeight.SemiBold) }
+            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                Text("AUREX · CONTROL", color = Violet, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                Text("Centro de auditoría", color = Midnight, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            }
+            TextButton(onClick = onLogout) { Text("Cerrar sesión", color = Violet, fontWeight = FontWeight.SemiBold, fontSize = 11.sp) }
         }
 
         Surface(shape = RoundedCornerShape(22.dp), color = Midnight) {
@@ -117,14 +122,21 @@ fun AdministratorAuditScreen(
 
 @Composable
 private fun AuditSummary(withinLimit: Int, total: Int) {
-    Surface(shape = RoundedCornerShape(20.dp), color = Color.White) {
-        Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+    Surface(shape = RoundedCornerShape(24.dp), color = Midnight, shadowElevation = 8.dp) {
+        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Revisión de tasa", color = Quiet, fontSize = 12.sp)
+                Text("RESUMEN DE CONTROL", color = Color.White.copy(alpha = .65f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
+                Spacer(Modifier.height(7.dp))
+                Text("Revisión de tasas", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(4.dp))
-                Text("Límite de referencia: +2,5 %", color = Midnight, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Límite de referencia: +2,5 %", color = Color.White.copy(alpha = .7f), fontSize = 11.sp)
             }
-            Text("$withinLimit / $total", color = Violet, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Surface(shape = RoundedCornerShape(18.dp), color = Color.White.copy(alpha = .1f)) {
+                Column(Modifier.padding(horizontal = 15.dp, vertical = 11.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("$withinLimit/$total", color = Color(0xFF8DE8D0), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("CONFORMES", color = Color.White.copy(alpha = .7f), fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = .5.sp)
+                }
+            }
         }
     }
 }
