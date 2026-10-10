@@ -16,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -29,14 +30,16 @@ import com.example.reto2.login.viewmodel.LoginViewModel
 
 @Composable
 fun LoginScreen(
-    viewModel: LoginViewModel = viewModel()
+    viewModel: LoginViewModel = viewModel(),
+    onRegisterClick: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
     LoginContent(
         state = state,
         onEmailChanged = viewModel::onEmailChanged,
         onPasswordChanged = viewModel::onPasswordChanged,
-        onLoginClicked = viewModel::onLoginClicked
+        onLoginClicked = viewModel::onLoginClicked,
+        onRegisterClick = onRegisterClick
     )
 }
 
@@ -45,7 +48,8 @@ private fun LoginContent(
     state: LoginUiState,
     onEmailChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
-    onLoginClicked: () -> Unit
+    onLoginClicked: () -> Unit,
+    onRegisterClick: () -> Unit
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -104,6 +108,14 @@ private fun LoginContent(
             state.statusMessage?.let { message ->
                 Spacer(Modifier.height(16.dp))
                 Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
+            Spacer(Modifier.height(12.dp))
+            TextButton(
+                onClick = onRegisterClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("¿No tienes cuenta? Regístrate")
             }
         }
     }

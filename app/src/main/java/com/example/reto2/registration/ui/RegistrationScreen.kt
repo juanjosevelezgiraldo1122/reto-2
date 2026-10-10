@@ -16,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -29,7 +30,8 @@ import com.example.reto2.registration.viewmodel.RegistrationViewModel
 
 @Composable
 fun RegistrationScreen(
-    viewModel: RegistrationViewModel = viewModel()
+    viewModel: RegistrationViewModel = viewModel(),
+    onLoginClick: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
     RegistrationContent(
@@ -37,7 +39,8 @@ fun RegistrationScreen(
         onEmailChanged = viewModel::onEmailChanged,
         onPasswordChanged = viewModel::onPasswordChanged,
         onPasswordConfirmationChanged = viewModel::onPasswordConfirmationChanged,
-        onRegisterClicked = viewModel::onRegisterClicked
+        onRegisterClicked = viewModel::onRegisterClicked,
+        onLoginClick = onLoginClick
     )
 }
 
@@ -47,7 +50,8 @@ private fun RegistrationContent(
     onEmailChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
     onPasswordConfirmationChanged: (String) -> Unit,
-    onRegisterClicked: () -> Unit
+    onRegisterClicked: () -> Unit,
+    onLoginClick: () -> Unit
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -107,6 +111,14 @@ private fun RegistrationContent(
             state.statusMessage?.let { message ->
                 Spacer(Modifier.height(16.dp))
                 Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
+            Spacer(Modifier.height(12.dp))
+            TextButton(
+                onClick = onLoginClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("¿Ya tienes cuenta? Inicia sesión")
             }
         }
     }
