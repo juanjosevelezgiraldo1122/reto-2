@@ -21,10 +21,12 @@ import com.example.reto2.auth.ui.AuthPrimaryButton
 import com.example.reto2.auth.ui.AuthStatus
 import com.example.reto2.auth.ui.AuthSwitchAction
 import com.example.reto2.login.viewmodel.LoginViewModel
+import com.example.reto2.auth.model.UserSession
 
 @Composable
 fun LoginScreen(
     viewModel: LoginViewModel = viewModel(),
+    onAuthenticated: (UserSession) -> Unit = {},
     onRegisterClick: () -> Unit = {},
     onBackToMarket: () -> Unit = {},
     onDemoClient: () -> Unit = {},
@@ -50,9 +52,9 @@ fun LoginScreen(
             label = "Contraseña",
             error = state.errors.password.takeIf { state.showValidation },
             imeAction = ImeAction.Done,
-            onDone = viewModel::onLoginClicked
+            onDone = { viewModel.onLoginClicked(onAuthenticated) }
         )
-        AuthPrimaryButton("Iniciar sesión", viewModel::onLoginClicked)
+        AuthPrimaryButton("Iniciar sesión", { viewModel.onLoginClicked(onAuthenticated) })
         state.statusMessage?.let { AuthStatus(it) }
         Spacer(Modifier.height(2.dp))
         AuthSwitchAction("¿Nuevo por aquí?  Crear una cuenta", onRegisterClick)

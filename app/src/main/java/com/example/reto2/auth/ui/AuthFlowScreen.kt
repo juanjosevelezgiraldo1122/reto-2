@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import com.example.reto2.auth.model.UserSession
 import com.example.reto2.login.ui.LoginScreen
 import com.example.reto2.registration.ui.RegistrationScreen
 
@@ -13,7 +14,8 @@ fun AuthFlowScreen(
     initialRegistration: Boolean = false,
     onBackToMarket: () -> Unit = {},
     onDemoClient: () -> Unit = {},
-    onDemoAdministrator: () -> Unit = {}
+    onDemoAdministrator: () -> Unit = {},
+    onAuthenticated: (UserSession) -> Unit = {}
 ) {
     var showRegistration by rememberSaveable(initialRegistration) {
         mutableStateOf(initialRegistration)
@@ -21,11 +23,13 @@ fun AuthFlowScreen(
 
     if (showRegistration) {
         RegistrationScreen(
+            onAuthenticated = onAuthenticated,
             onLoginClick = { showRegistration = false },
             onBackToMarket = onBackToMarket
         )
     } else {
         LoginScreen(
+            onAuthenticated = onAuthenticated,
             onRegisterClick = { showRegistration = true },
             onBackToMarket = onBackToMarket,
             onDemoClient = onDemoClient,

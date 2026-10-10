@@ -6,7 +6,8 @@ enum class UserRole {
 }
 
 enum class SessionMode {
-    DEMO
+    DEMO,
+    LOCAL
 }
 
 data class UserSession(

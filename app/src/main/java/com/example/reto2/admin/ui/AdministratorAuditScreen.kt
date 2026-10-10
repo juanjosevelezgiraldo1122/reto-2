@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.reto2.admin.viewmodel.AdministratorAuditViewModel
-import com.example.reto2.admin.viewmodel.DemoAuditRecord
 import com.example.reto2.auth.model.UserRole
 import com.example.reto2.auth.model.UserSession
 import com.example.reto2.forex.model.ExchangeOperation
@@ -90,7 +89,7 @@ fun AdministratorAuditScreen(
                 Text("Acceso denegado. Esta vista requiere el rol administrador.", Modifier.padding(18.dp), color = Color(0xFF9C3535))
             }
         } else {
-            AuditSummary(state.sampleRecords.count(DemoAuditRecord::withinLimit), state.sampleRecords.size)
+            AuditSummary(state.sampleRecords.count { it.withinLimit }, state.sampleRecords.size)
 
             SectionHeading("Transacciones de ejemplo", "Datos ficticios para explorar auditoría")
             state.sampleRecords.forEach { record -> DemoAuditCard(record) }
@@ -139,7 +138,7 @@ private fun SectionHeading(title: String, detail: String) {
 }
 
 @Composable
-private fun DemoAuditCard(record: DemoAuditRecord) {
+private fun DemoAuditCard(record: com.example.reto2.forex.model.PersistedAuditRecord) {
     val deviation = record.deviationPercent
     val compliant = record.withinLimit
     val verdictColor = if (compliant) Color(0xFF187B64) else Color(0xFFB04444)
@@ -153,9 +152,9 @@ private fun DemoAuditCard(record: DemoAuditRecord) {
                 Text(record.status, color = Violet, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                RateValue("Referencia", record.referenceRate.toPlainString())
-                RateValue("Aplicada", record.appliedRate.toPlainString())
-                RateValue("Variación", "${deviation.toPlainString()}%")
+                RateValue("Referencia", record.referenceRate)
+                RateValue("Aplicada", record.appliedRate)
+                RateValue("Variación", "$deviation%")
             }
             Surface(shape = RoundedCornerShape(12.dp), color = verdictColor.copy(alpha = 0.09f)) {
                 Text(
