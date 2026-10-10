@@ -28,6 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -41,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.reto2.auth.ui.AuthSwitchAction
+import com.example.reto2.auth.model.RolePermissions
+import com.example.reto2.auth.model.UserSession
 import com.example.reto2.forex.model.ExchangeOperation
 import com.example.reto2.forex.model.OperationStatus
 import com.example.reto2.forex.model.TradeSide
@@ -60,10 +63,13 @@ private val CurrencyCodes = listOf("USD", "EUR", "COP", "GBP", "JPY", "CAD", "CH
 @Composable
 fun ExchangeScreen(
     viewModel: ExchangeViewModel = viewModel(),
+    session: UserSession? = null,
     onRequireLogin: () -> Unit = {},
-    onRequireRegistration: () -> Unit = {}
+    onRequireRegistration: () -> Unit = {},
+    onLogout: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
+    LaunchedEffect(session) { viewModel.refreshFor(session) }
 
     Column(
         modifier = Modifier
@@ -74,17 +80,23 @@ fun ExchangeScreen(
             .padding(top = 18.dp, bottom = 30.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        ExchangeHeader(onRequireLogin)
+        ExchangeHeader(session, onRequireLogin, onLogout)
         MarketIntro()
-        TradeCard(state, viewModel, onRequireLogin)
-        AuthSwitchAction("¿Nuevo en el mercado?  Crea tu cuenta", onRequireRegistration)
+        TradeCard(state, viewModel, session, onRequireLogin)
+        if (session == null) {
+            AuthSwitchAction("¿Nuevo en el mercado?  Crea tu cuenta", onRequireRegistration)
+        }
         RateNotice()
         OperationHistory(state.operations)
     }
 }
 
 @Composable
-private fun ExchangeHeader(onRequireLogin: () -> Unit) {
+private fun ExchangeHeader(
+    session: UserSession?,
+    onRequireLogin: () -> Unit,
+    onLogout: () -> Unit
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Surface(shape = RoundedCornerShape(15.dp), color = Navy) {
             Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
@@ -95,8 +107,15 @@ private fun ExchangeHeader(onRequireLogin: () -> Unit) {
             Text("CURRENCY EXCHANGE", fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, color = Navy)
             Text("Global markets", fontSize = 12.sp, color = SecondaryText)
         }
-        TextButton(onClick = onRequireLogin) {
-            Text("Iniciar sesión", color = Blue, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        if (session == null) {
+            TextButton(onClick = onRequireLogin) {
+                Text("Iniciar sesión", color = Blue, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+            }
+        } else {
+            Column(horizontalAlignment = Alignment.End) {
+                Text("CLIENTE · DEMO", color = Color(0xFF238B72), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                TextButton(onClick = onLogout) { Text("Salir", color = Blue, fontSize = 12.sp) }
+            }
         }
     }
 }
@@ -114,6 +133,7 @@ private fun MarketIntro() {
 private fun TradeCard(
     state: ExchangeUiState,
     viewModel: ExchangeViewModel,
+    session: UserSession?,
     onRequireLogin: () -> Unit
 ) {
     Surface(
@@ -184,14 +204,32 @@ private fun TradeCard(
                 }
             }
             Button(
-                onClick = onRequireLogin,
+                onClick = {
+                    if (RolePermissions.canTrade(session)) viewModel.confirmRequest(session)
+                    else onRequireLogin()
+                },
                 modifier = Modifier.fillMaxWidth().height(55.dp),
                 shape = RoundedCornerShape(15.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Navy)
             ) {
-                Text(if (state.side == TradeSide.BUY) "Continuar compra" else "Continuar venta", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Text(
+                    when {
+                        !RolePermissions.canTrade(session) -> "Inicia sesión para operar"
+                        state.side == TradeSide.BUY -> "Crear solicitud de compra demo"
+                        else -> "Crear solicitud de venta demo"
+                    },
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp
+                )
             }
-            Text("Inicia sesión para continuar. No se enviará ninguna operación antes de autenticarte.", modifier = Modifier.fillMaxWidth(), color = SecondaryText, fontSize = 11.sp)
+            Text(
+                if (RolePermissions.canTrade(session))
+                    "Modo demostración: se guardará como Pendiente; no se ejecutará una operación real."
+                else "Inicia sesión para continuar. No se enviará ninguna operación antes de autenticarte.",
+                modifier = Modifier.fillMaxWidth(),
+                color = SecondaryText,
+                fontSize = 11.sp
+            )
         }
     }
 }

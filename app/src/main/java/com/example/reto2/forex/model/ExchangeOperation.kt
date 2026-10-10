@@ -1,6 +1,8 @@
 package com.example.reto2.forex.model
 
 import android.content.Context
+import com.example.reto2.auth.model.RolePermissions
+import com.example.reto2.auth.model.UserSession
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -18,10 +20,13 @@ enum class OperationStatus {
 
 data class ExchangeOperation(
     val id: String,
+    val ownerId: String,
     val side: TradeSide,
     val sourceCurrency: String,
     val targetCurrency: String,
     val amount: String,
+    val referenceRate: String? = null,
+    val appliedRate: String? = null,
     val status: OperationStatus = OperationStatus.PENDING,
     val reason: String? = null,
     val createdAtMillis: Long = System.currentTimeMillis()
@@ -42,15 +47,21 @@ class ExchangeOperationRepository(context: Context) {
         }.getOrDefault(emptyList())
     }
 
+    fun getVisibleTo(session: UserSession): List<ExchangeOperation> =
+        getAll().filter { RolePermissions.canViewOperation(session, it.ownerId) }
+
     @Synchronized
     fun createPending(
+        session: UserSession,
         side: TradeSide,
         sourceCurrency: String,
         targetCurrency: String,
         amount: String
     ): ExchangeOperation {
+        check(RolePermissions.canTrade(session)) { "Este rol no puede operar divisas" }
         val operation = ExchangeOperation(
             id = UUID.randomUUID().toString(),
+            ownerId = session.id,
             side = side,
             sourceCurrency = sourceCurrency,
             targetCurrency = targetCurrency,
@@ -107,10 +118,13 @@ class ExchangeOperationRepository(context: Context) {
             json.put(
                 JSONObject()
                     .put("id", operation.id)
+                    .put("ownerId", operation.ownerId)
                     .put("side", operation.side.name)
                     .put("source", operation.sourceCurrency)
                     .put("target", operation.targetCurrency)
                     .put("amount", operation.amount)
+                    .apply { operation.referenceRate?.let { put("referenceRate", it) } }
+                    .apply { operation.appliedRate?.let { put("appliedRate", it) } }
                     .put("status", operation.status.name)
                     .put("createdAt", operation.createdAtMillis)
                     .apply { operation.reason?.let { put("reason", it) } }
@@ -123,10 +137,13 @@ class ExchangeOperationRepository(context: Context) {
 
     private fun JSONObject.toOperation() = ExchangeOperation(
         id = getString("id"),
+        ownerId = optString("ownerId", "legacy-unassigned"),
         side = TradeSide.valueOf(getString("side")),
         sourceCurrency = getString("source"),
         targetCurrency = getString("target"),
         amount = getString("amount"),
+        referenceRate = optString("referenceRate").takeIf(String::isNotEmpty),
+        appliedRate = optString("appliedRate").takeIf(String::isNotEmpty),
         status = OperationStatus.valueOf(getString("status")),
         reason = optString("reason").takeIf(String::isNotEmpty),
         createdAtMillis = getLong("createdAt")

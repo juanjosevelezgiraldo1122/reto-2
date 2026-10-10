@@ -255,6 +255,22 @@ fun AuthPrimaryButton(label: String, onClick: () -> Unit) {
 }
 
 @Composable
+fun AuthDemoButton(label: String, onClick: () -> Unit, emphasized: Boolean = true) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().height(52.dp),
+        shape = RoundedCornerShape(15.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (emphasized) Color(0xFF10172B) else Color(0xFFF0F2FF),
+            contentColor = if (emphasized) Color.White else Color(0xFF5046E5)
+        ),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+    ) {
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
 fun AuthSwitchAction(label: String, onClick: () -> Unit) {
     TextButton(
         onClick = onClick,

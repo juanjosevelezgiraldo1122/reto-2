@@ -11,7 +11,9 @@ import com.example.reto2.registration.ui.RegistrationScreen
 @Composable
 fun AuthFlowScreen(
     initialRegistration: Boolean = false,
-    onBackToMarket: () -> Unit = {}
+    onBackToMarket: () -> Unit = {},
+    onDemoClient: () -> Unit = {},
+    onDemoAdministrator: () -> Unit = {}
 ) {
     var showRegistration by rememberSaveable(initialRegistration) {
         mutableStateOf(initialRegistration)
@@ -25,7 +27,9 @@ fun AuthFlowScreen(
     } else {
         LoginScreen(
             onRegisterClick = { showRegistration = true },
-            onBackToMarket = onBackToMarket
+            onBackToMarket = onBackToMarket,
+            onDemoClient = onDemoClient,
+            onDemoAdministrator = onDemoAdministrator
         )
     }
 }

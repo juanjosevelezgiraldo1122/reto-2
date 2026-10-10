@@ -2,6 +2,8 @@ package com.example.reto2.forex.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import com.example.reto2.auth.model.RolePermissions
+import com.example.reto2.auth.model.UserSession
 import com.example.reto2.forex.model.ExchangeOperation
 import com.example.reto2.forex.model.ExchangeOperationRepository
 import com.example.reto2.forex.model.TradeSide
@@ -41,7 +43,17 @@ class ExchangeViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun confirmRequest() {
+    fun refreshFor(session: UserSession?) {
+        _uiState.update { state ->
+            state.copy(operations = session?.let(repository::getVisibleTo).orEmpty())
+        }
+    }
+
+    fun confirmRequest(session: UserSession?) {
+        if (!RolePermissions.canTrade(session) || session == null) {
+            _uiState.update { it.copy(validationMessage = "Este rol no tiene permiso para comprar o vender.") }
+            return
+        }
         val current = _uiState.value
         val amount = current.amount.replace(',', '.').toBigDecimalOrNull()
         val message = when {
@@ -56,6 +68,7 @@ class ExchangeViewModel(application: Application) : AndroidViewModel(application
 
         val saved = runCatching {
             repository.createPending(
+                session = session,
                 side = current.side,
                 sourceCurrency = current.sourceCurrency,
                 targetCurrency = current.targetCurrency,
@@ -68,7 +81,7 @@ class ExchangeViewModel(application: Application) : AndroidViewModel(application
         _uiState.update {
             it.copy(
                 amount = "",
-                operations = repository.getAll(),
+                operations = repository.getVisibleTo(session),
                 latestRequestId = saved.id,
                 validationMessage = null
             )
