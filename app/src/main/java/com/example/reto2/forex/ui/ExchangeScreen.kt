@@ -50,6 +50,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.reto2.alerts.notification.AlertNotificationHelper
+import com.example.reto2.alerts.ui.AlertsSectionView
 import com.example.reto2.auth.ui.AuthSwitchAction
 import com.example.reto2.auth.model.RolePermissions
 import com.example.reto2.auth.model.UserSession
@@ -58,6 +60,7 @@ import com.example.reto2.forex.model.OperationStatus
 import com.example.reto2.forex.model.TradeSide
 import com.example.reto2.forex.viewmodel.ExchangeUiState
 import com.example.reto2.forex.viewmodel.ExchangeViewModel
+import com.example.reto2.scanner.ui.ScannerScreen
 import java.text.SimpleDateFormat
 import java.text.DecimalFormat
 import java.util.Date
@@ -75,6 +78,7 @@ private enum class MarketTab(val title: String, val glyph: String) {
     HOME("Inicio", "⌂"),
     MARKETS("Mercados", "↗"),
     CONVERT("Convertir", "⇄"),
+    ALERTS("Alertas", "🔔"),
     ACTIVITY("Actividad", "◷"),
     PROFILE("Perfil", "○")
 }
@@ -83,13 +87,45 @@ private enum class MarketTab(val title: String, val glyph: String) {
 fun ExchangeScreen(
     viewModel: ExchangeViewModel = viewModel(),
     session: UserSession? = null,
+    initialDestination: String? = null,
+    initialBaseCurrency: String? = null,
+    initialTargetCurrency: String? = null,
     onRequireLogin: () -> Unit = {},
     onRequireRegistration: () -> Unit = {},
     onLogout: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
     var selectedTab by rememberSaveable { mutableStateOf(MarketTab.HOME.name) }
+    var isScannerOpen by rememberSaveable { mutableStateOf(false) }
+
     LaunchedEffect(session) { viewModel.refreshFor(session) }
+
+    LaunchedEffect(initialDestination, initialBaseCurrency, initialTargetCurrency) {
+        if (initialBaseCurrency != null && initialTargetCurrency != null) {
+            viewModel.selectPair(initialBaseCurrency, initialTargetCurrency)
+        }
+        when (initialDestination) {
+            AlertNotificationHelper.DESTINATION_CONVERT -> selectedTab = MarketTab.CONVERT.name
+            AlertNotificationHelper.DESTINATION_ALERTS -> selectedTab = MarketTab.ALERTS.name
+        }
+    }
+
+    if (isScannerOpen) {
+        ScannerScreen(
+            initialTargetCurrency = state.targetCurrency,
+            onClose = { isScannerOpen = false },
+            onTransferToConverter = { scannedAmount, scannedSource, scannedTarget ->
+                viewModel.applyScannedValue(
+                    amount = scannedAmount,
+                    sourceCurrency = scannedSource,
+                    targetCurrency = scannedTarget
+                )
+                isScannerOpen = false
+                selectedTab = MarketTab.CONVERT.name
+            }
+        )
+        return
+    }
 
     val activeTab = runCatching { MarketTab.valueOf(selectedTab) }.getOrDefault(MarketTab.HOME)
     Scaffold(
@@ -100,8 +136,8 @@ fun ExchangeScreen(
                     NavigationBarItem(
                         selected = tab == activeTab,
                         onClick = { selectedTab = tab.name },
-                        icon = { Text(tab.glyph, fontSize = 20.sp, fontWeight = FontWeight.SemiBold) },
-                        label = { Text(tab.title, fontSize = 9.sp, maxLines = 1) },
+                        icon = { Text(tab.glyph, fontSize = 18.sp, fontWeight = FontWeight.SemiBold) },
+                        label = { Text(tab.title, fontSize = 8.sp, maxLines = 1) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = Blue,
                             selectedTextColor = Blue,
@@ -113,11 +149,16 @@ fun ExchangeScreen(
                 }
             }
         }
-    ) {
-        innerPadding ->
+    ) { innerPadding ->
         Column(Modifier.fillMaxSize().padding(innerPadding)) {
             Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp)) {
-                ExchangeHeader(session, onRequireLogin, onLogout)
+                ExchangeHeader(
+                    session = session,
+                    onRequireLogin = onRequireLogin,
+                    onLogout = onLogout,
+                    onOpenScanner = { isScannerOpen = true },
+                    onOpenAlerts = { selectedTab = MarketTab.ALERTS.name }
+                )
             }
             Column(
                 modifier = Modifier
@@ -128,12 +169,37 @@ fun ExchangeScreen(
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 when (activeTab) {
-                    MarketTab.HOME -> HomeView(state, onOpenMarkets = { selectedTab = MarketTab.MARKETS.name }, onOpenConverter = { selectedTab = MarketTab.CONVERT.name })
-                    MarketTab.MARKETS -> MarketsView(state, onRefresh = viewModel::refreshRates)
+                    MarketTab.HOME -> HomeView(
+                        state = state,
+                        onOpenMarkets = { selectedTab = MarketTab.MARKETS.name },
+                        onOpenConverter = { selectedTab = MarketTab.CONVERT.name },
+                        onOpenScanner = { isScannerOpen = true },
+                        onOpenAlerts = { selectedTab = MarketTab.ALERTS.name }
+                    )
+                    MarketTab.MARKETS -> MarketsView(
+                        state = state,
+                        onRefresh = viewModel::refreshRates,
+                        onOpenAlerts = { selectedTab = MarketTab.ALERTS.name }
+                    )
                     MarketTab.CONVERT -> {
                         PageHeading("Convertir", "Configura tu solicitud de compra o venta.")
-                        TradeCard(state, viewModel, session, onRequireLogin)
+                        TradeCard(
+                            state = state,
+                            viewModel = viewModel,
+                            session = session,
+                            onRequireLogin = onRequireLogin,
+                            onOpenScanner = { isScannerOpen = true }
+                        )
                         RateNotice()
+                    }
+                    MarketTab.ALERTS -> {
+                        PageHeading("Alertas de mercado", "Recibe notificaciones críticas cuando un par cruce tu umbral.")
+                        AlertsSectionView(
+                            onOpenPairInConverter = { base, target ->
+                                viewModel.selectPair(base, target)
+                                selectedTab = MarketTab.CONVERT.name
+                            }
+                        )
                     }
                     MarketTab.ACTIVITY -> {
                         PageHeading("Tu actividad", "Consulta el estado y el historial de tus solicitudes.")
@@ -151,7 +217,9 @@ fun ExchangeScreen(
 private fun HomeView(
     state: ExchangeUiState,
     onOpenMarkets: () -> Unit,
-    onOpenConverter: () -> Unit
+    onOpenConverter: () -> Unit,
+    onOpenScanner: () -> Unit,
+    onOpenAlerts: () -> Unit
 ) {
     MarketHero()
     MarketHighlights()
@@ -167,6 +235,21 @@ private fun HomeView(
         FeaturedPair("EUR", "USD", state.ratesFromUsd["EUR"]?.toBigDecimalOrNull()?.let {
             runCatching { java.math.BigDecimal.ONE.divide(it, 5, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() }.getOrNull()
         }, Modifier.weight(1f))
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Button(
+            onClick = onOpenScanner,
+            modifier = Modifier.weight(1f).height(52.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Blue)
+        ) { Text("📷 Escanear precio", fontWeight = FontWeight.SemiBold, fontSize = 12.sp) }
+
+        Button(
+            onClick = onOpenAlerts,
+            modifier = Modifier.weight(1f).height(52.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Navy)
+        ) { Text("🔔 Alertas umbral", fontWeight = FontWeight.SemiBold, fontSize = 12.sp) }
     }
     Button(
         onClick = onOpenConverter,
@@ -186,7 +269,11 @@ private fun PageHeading(title: String, subtitle: String) {
 }
 
 @Composable
-private fun MarketsView(state: ExchangeUiState, onRefresh: () -> Unit) {
+private fun MarketsView(
+    state: ExchangeUiState,
+    onRefresh: () -> Unit,
+    onOpenAlerts: () -> Unit
+) {
     PageHeading("Mercados", "Monedas principales frente al dólar estadounidense.")
     Surface(shape = RoundedCornerShape(22.dp), color = Navy) {
         Column(Modifier.fillMaxWidth().padding(18.dp)) {
@@ -195,6 +282,7 @@ private fun MarketsView(state: ExchangeUiState, onRefresh: () -> Unit) {
                     Text("COTIZACIONES", color = Color.White.copy(alpha = .66f), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                     Text("Referencia de mercado", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
+                TextButton(onClick = onOpenAlerts) { Text("🔔 Alertas", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
                 TextButton(onClick = onRefresh) { Text("Actualizar", color = Mint, fontSize = 11.sp) }
             }
             state.ratesUpdatedAt?.let {
@@ -307,7 +395,9 @@ private fun ProfilePreference(title: String, description: String, glyph: String)
 private fun ExchangeHeader(
     session: UserSession?,
     onRequireLogin: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onOpenScanner: () -> Unit = {},
+    onOpenAlerts: () -> Unit = {}
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Surface(shape = RoundedCornerShape(15.dp), color = Navy, shadowElevation = 5.dp) {
@@ -318,6 +408,12 @@ private fun ExchangeHeader(
         Column(Modifier.padding(start = 12.dp).weight(1f)) {
             Text("AUREX", fontSize = 13.sp, fontWeight = FontWeight.Black, letterSpacing = 1.8.sp, color = Navy)
             Text("Mercado global de divisas", fontSize = 11.sp, color = SecondaryText)
+        }
+        TextButton(onClick = onOpenScanner) {
+            Text("📷", fontSize = 16.sp)
+        }
+        TextButton(onClick = onOpenAlerts) {
+            Text("🔔", fontSize = 16.sp)
         }
         if (session == null) {
             TextButton(onClick = onRequireLogin) {
@@ -386,7 +482,8 @@ private fun TradeCard(
     state: ExchangeUiState,
     viewModel: ExchangeViewModel,
     session: UserSession?,
-    onRequireLogin: () -> Unit
+    onRequireLogin: () -> Unit,
+    onOpenScanner: () -> Unit = {}
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -424,7 +521,16 @@ private fun TradeCard(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Monto en ${state.sourceCurrency}", color = Navy, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Monto en ${state.sourceCurrency}", color = Navy, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    TextButton(onClick = onOpenScanner) {
+                        Text("📷 Escanear billete o precio", color = Blue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
                 OutlinedTextField(
                     value = state.amount,
                     onValueChange = viewModel::updateAmount,

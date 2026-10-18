@@ -59,6 +59,31 @@ class ExchangeViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun applyScannedValue(amount: String, sourceCurrency: String, targetCurrency: String) {
+        _uiState.update { current ->
+            withIndicativeRate(
+                current.copy(
+                    amount = amount,
+                    sourceCurrency = sourceCurrency,
+                    targetCurrency = targetCurrency,
+                    validationMessage = null
+                )
+            )
+        }
+    }
+
+    fun selectPair(sourceCurrency: String, targetCurrency: String) {
+        _uiState.update { current ->
+            withIndicativeRate(
+                current.copy(
+                    sourceCurrency = sourceCurrency,
+                    targetCurrency = targetCurrency,
+                    validationMessage = null
+                )
+            )
+        }
+    }
+
     fun refreshRates() {
         viewModelScope.launch {
             runCatching { withContext(Dispatchers.IO) { ratesRepository.fetchLatest() } }

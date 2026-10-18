@@ -114,7 +114,7 @@ class ExchangeOperationRepository(context: Context) {
     }
 }
 
-private class AppDataDatabase(context: Context) : SQLiteOpenHelper(
+internal class AppDataDatabase(context: Context) : SQLiteOpenHelper(
     context,
     DATABASE_NAME,
     null,
@@ -160,11 +160,34 @@ private class AppDataDatabase(context: Context) : SQLiteOpenHelper(
             )""".trimIndent()
         )
         createAccountsTable(db)
+        createPriceAlertsTable(db)
         seedDemoAuditRecords(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) createAccountsTable(db)
+        if (oldVersion < 3) createPriceAlertsTable(db)
+    }
+
+    override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        createAccountsTable(db)
+        createPriceAlertsTable(db)
+    }
+
+    private fun createPriceAlertsTable(db: SQLiteDatabase) {
+        db.execSQL(
+            """CREATE TABLE IF NOT EXISTS price_alerts (
+                id TEXT PRIMARY KEY NOT NULL,
+                base_currency TEXT NOT NULL,
+                target_currency TEXT NOT NULL,
+                target_threshold TEXT NOT NULL,
+                direction TEXT NOT NULL,
+                is_active INTEGER NOT NULL,
+                last_notified_at INTEGER,
+                last_evaluated_rate TEXT,
+                created_at INTEGER NOT NULL
+            )""".trimIndent()
+        )
     }
 
     fun register(email: String, password: String): UserSession {
@@ -364,6 +387,87 @@ private class AppDataDatabase(context: Context) : SQLiteOpenHelper(
         createdAtMillis = getLong(getColumnIndexOrThrow("created_at"))
     )
 
+    fun getAllPriceAlerts(): List<com.example.reto2.alerts.model.PriceAlert> = readableDatabase.query(
+        "price_alerts", null, null, null, null, null, "created_at DESC"
+    ).use { cursor ->
+        buildList {
+            while (cursor.moveToNext()) {
+                add(cursor.toPriceAlert())
+            }
+        }
+    }
+
+    fun getActivePriceAlerts(): List<com.example.reto2.alerts.model.PriceAlert> = readableDatabase.query(
+        "price_alerts", null, "is_active = 1", null, null, null, "created_at DESC"
+    ).use { cursor ->
+        buildList {
+            while (cursor.moveToNext()) {
+                add(cursor.toPriceAlert())
+            }
+        }
+    }
+
+    fun insertPriceAlert(alert: com.example.reto2.alerts.model.PriceAlert) {
+        writableDatabase.insertWithOnConflict(
+            "price_alerts",
+            null,
+            ContentValues().apply {
+                put("id", alert.id)
+                put("base_currency", alert.baseCurrency)
+                put("target_currency", alert.targetCurrency)
+                put("target_threshold", alert.targetThreshold.stripTrailingZeros().toPlainString())
+                put("direction", alert.direction.name)
+                put("is_active", if (alert.isActive) 1 else 0)
+                put("last_notified_at", alert.lastNotifiedAt)
+                put("last_evaluated_rate", alert.lastEvaluatedRate?.stripTrailingZeros()?.toPlainString())
+                put("created_at", alert.createdAt)
+            },
+            SQLiteDatabase.CONFLICT_REPLACE
+        )
+    }
+
+    fun setPriceAlertActive(id: String, isActive: Boolean) {
+        writableDatabase.update(
+            "price_alerts",
+            ContentValues().apply { put("is_active", if (isActive) 1 else 0) },
+            "id = ?",
+            arrayOf(id)
+        )
+    }
+
+    fun updatePriceAlertEvaluation(id: String, currentRate: BigDecimal, notifiedAtMillis: Long?) {
+        val values = ContentValues().apply {
+            put("last_evaluated_rate", currentRate.stripTrailingZeros().toPlainString())
+            if (notifiedAtMillis != null) {
+                put("last_notified_at", notifiedAtMillis)
+            }
+        }
+        writableDatabase.update("price_alerts", values, "id = ?", arrayOf(id))
+    }
+
+    fun deletePriceAlert(id: String) {
+        writableDatabase.delete("price_alerts", "id = ?", arrayOf(id))
+    }
+
+    private fun Cursor.toPriceAlert() = com.example.reto2.alerts.model.PriceAlert(
+        id = getString(getColumnIndexOrThrow("id")),
+        baseCurrency = getString(getColumnIndexOrThrow("base_currency")),
+        targetCurrency = getString(getColumnIndexOrThrow("target_currency")),
+        targetThreshold = getString(getColumnIndexOrThrow("target_threshold")).toBigDecimal(),
+        direction = com.example.reto2.alerts.model.ThresholdDirection.valueOf(
+            getString(getColumnIndexOrThrow("direction"))
+        ),
+        isActive = getInt(getColumnIndexOrThrow("is_active")) == 1,
+        lastNotifiedAt = getLongOrNull("last_notified_at"),
+        lastEvaluatedRate = getStringOrNull("last_evaluated_rate")?.toBigDecimalOrNull(),
+        createdAt = getLong(getColumnIndexOrThrow("created_at"))
+    )
+
+    private fun Cursor.getLongOrNull(column: String): Long? {
+        val index = getColumnIndexOrThrow(column)
+        return if (isNull(index)) null else getLong(index)
+    }
+
     private fun Cursor.getStringOrNull(column: String): String? {
         val index = getColumnIndexOrThrow(column)
         return if (isNull(index)) null else getString(index)
@@ -392,6 +496,7 @@ private class AppDataDatabase(context: Context) : SQLiteOpenHelper(
 
     private companion object {
         const val DATABASE_NAME = "fx_application.db"
-        const val DATABASE_VERSION = 2
+        const val DATABASE_VERSION = 3
     }
 }
+
